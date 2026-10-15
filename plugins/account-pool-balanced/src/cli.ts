@@ -1,6 +1,7 @@
 import type { BbPluginApi, PluginCliResult } from "@get-bb/plugin-sdk";
 import { setTimeout as wait } from "node:timers/promises";
 import fs from "node:fs/promises";
+import { homedir } from "node:os";
 import {
   COMPATIBLE_ENV_SUMMARY,
   compatibleProvider,
@@ -349,7 +350,7 @@ export function registerPoolCli(
         summary:
           "Add API-key accounts for every supported provider key found in the environment",
         usage:
-          "bb pool account add-env [--env-file <path>] [--only <provider>] [--priority <n>]",
+          "bb pool account add-env [--env-file <path>[,<path>...]] [--only <provider>] [--priority <n>]",
       },
       {
         name: "account-login-poll",
@@ -696,10 +697,16 @@ export function registerPoolCli(
           let source: Readonly<Record<string, string | undefined>> = process.env;
           const envFile = flags.values.get("env-file");
           if (envFile !== undefined) {
-            source = {
-              ...process.env,
-              ...parseEnvFile(await fs.readFile(envFile, "utf8")),
-            };
+            const merged: Record<string, string> = {};
+            for (const entry of envFile.split(",")) {
+              const file = entry.trim();
+              if (file === "") continue;
+              const expanded = file.startsWith("~/")
+                ? homedir() + file.slice(1)
+                : file;
+              Object.assign(merged, parseEnvFile(await fs.readFile(expanded, "utf8")));
+            }
+            source = { ...process.env, ...merged };
           }
           const only = flags.values.get("only");
           const priority = Number(flags.values.get("priority") ?? "100");
@@ -712,7 +719,10 @@ export function registerPoolCli(
               stdout:
                 "No supported provider API keys found. Checked: " +
                 COMPATIBLE_ENV_SUMMARY +
-                "\n",
+                ". The bb server often runs without your shell rc environment; " +
+                "pass files explicitly, e.g. " +
+                "--env-file ~/.zshrc or --env-file ~/.zshrc,~/.config/freelm/env " +
+                "(export KEY='...' lines are parsed; later files win).\n",
             };
           }
           const existing = await operations.list();

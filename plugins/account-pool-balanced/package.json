@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-account-pool-balanced",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "type": "module",
   "description": "Account pool for BB agents: Claude, Codex, Kimi, Z.ai, OpenCode, Cursor, Devin plus OpenAI-compatible API-key providers (NVIDIA, OpenRouter, Groq, Mistral, ModelScope, Cloudflare, LLM7, Kilo, OpenCode Zen).",

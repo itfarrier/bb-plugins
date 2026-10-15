@@ -24,7 +24,7 @@
         "git": {
           "url": "https://github.com/itfarrier/bb-plugins.git",
           "subdir": "plugins/account-pool-balanced",
-          "range": "^0.5.0",
+          "range": "^0.5.1",
           "tagPrefix": "account-pool-balanced/"
         }
       }
