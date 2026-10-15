@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-account-pool-balanced",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "type": "module",
   "description": "Account pool for BB agents: Claude, Codex, Kimi, Z.ai, OpenCode, Cursor, Devin plus OpenAI-compatible API-key providers (NVIDIA, OpenRouter, Groq, Mistral, ModelScope, Cloudflare, LLM7, Kilo, OpenCode Zen).",
@@ -28,6 +28,7 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@get-bb/plugin-sdk": "^0.4.94",
     "@hugeicons/core-free-icons": "^4.0.0",
     "@hugeicons/react": "^1.1.5",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -36,7 +37,6 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@get-bb/plugin-sdk": "^0.4.94",
     "@radix-ui/react-dialog": "^1.1.19",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
     "@radix-ui/react-tooltip": "^1.2.8",
