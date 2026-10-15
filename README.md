@@ -65,6 +65,10 @@ npm run pool -- --data-dir /secure/pool serve --port 8787
 
 See [external clients and standalone setup](plugins/account-pool-balanced/docs/external-clients.md) for the full client matrix (Claude Code, Codex, Cursor, Devin).
 
+## Showing pooled providers in BB's picker
+
+The pool routes traffic; BB's agent picker lists agent providers. To see pooled providers in the menu, register matching ACP agents (OpenCode) and point them at the pool-injected environment — copy-paste steps in [picker setup](plugins/account-pool-balanced/docs/picker-setup.md).
+
 ## Inherited upstream features
 
 Sequential and balanced routing, primary/reserve accounts, per-account caps, session affinity, quota telemetry for Claude/Codex/Kimi/Z.ai/OpenCode Go, Cursor and Devin adapters, project routing, VPN Guard integration, external clients and a standalone server — all documented in [PLUGIN_OVERVIEW.md](plugins/account-pool-balanced/PLUGIN_OVERVIEW.md) and the upstream README at https://github.com/OXI-717/bb-plugins.
