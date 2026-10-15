@@ -339,12 +339,15 @@ export function createAccountPoolPlugin(
         expiredHint:
           "The pool token was rotated or every account was disabled; restart the thread.",
         installUrl: "https://github.com/itfarrier/bb-plugins",
-        brandPrefix: "",
       },
-      models: {
-        fallback: pickerFallbackModels(definition, models),
-        scope: "host",
-      },
+      ...(models.length === 0
+        ? {}
+        : {
+            models: {
+              fallback: pickerFallbackModels(definition, models),
+              scope: "host",
+            },
+          }),
     });
     const syncPickerProviders = async () => {
       const accounts = await operations.list();

@@ -125,11 +125,17 @@ export function modelIdsFromCatalog(payload: unknown): string[] {
   if (typeof payload !== "object" || payload === null) return [];
   const data = (payload as { data?: unknown }).data;
   if (!Array.isArray(data)) return [];
-  return data
-    .map((entry) =>
-      typeof entry === "object" && entry !== null && typeof (entry as { id?: unknown }).id === "string"
-        ? (entry as { id: string }).id
-        : null,
-    )
-    .filter((id): id is string => id !== null);
+  return [
+    ...new Set(
+      data
+        .map((entry) =>
+          typeof entry === "object" &&
+          entry !== null &&
+          typeof (entry as { id?: unknown }).id === "string"
+            ? (entry as { id: string }).id
+            : null,
+        )
+        .filter((id): id is string => id !== null),
+    ),
+  ];
 }

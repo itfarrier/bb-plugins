@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { validatePluginProviderDeclaration } from "@get-bb/plugin-sdk/internal/host-policy";
 import {
   PICKER_PROVIDER_DEFS,
   desiredPickerProviders,
@@ -67,10 +68,86 @@ describe("picker providers", () => {
   it("extracts model ids from a hub /models response", () => {
     expect(
       modelIdsFromCatalog({
-        data: [{ id: "a" }, { id: "b" }, { nope: true }, "junk"],
+        data: [{ id: "a" }, { id: "b" }, { id: "a" }, { nope: true }, "junk"],
       }),
     ).toEqual(["a", "b"]);
     expect(modelIdsFromCatalog(null)).toEqual([]);
     expect(modelIdsFromCatalog({ error: {} })).toEqual([]);
+  });
+});
+
+describe("picker declarations against bb's real validator", () => {
+  it("every pool provider declaration passes validatePluginProviderDeclaration", () => {
+    for (const definition of PICKER_PROVIDER_DEFS) {
+      const models = ["model-a", "model-b"];
+      const declaration = {
+        id: definition.pickerId,
+        displayName: definition.displayName,
+        icon: "Layers",
+        experimental_bridgeOptions: {
+          acpLaunchSpec: {
+            displayName: definition.displayName,
+            command: "opencode",
+            args: ["acp"],
+            env: {},
+          },
+          acpDialect: "generic",
+        },
+        maintenance: {},
+        capabilities: {
+          supportsServiceTier: false,
+          supportsNativeUserQuestion: false,
+          fork: "none",
+          supportsManualCompaction: false,
+          supportsThreadArchive: false,
+          supportsThreadRename: false,
+          permissionModes: ["auto", "full"],
+          reasoningLevels: ["low", "medium", "high"],
+        },
+        reasoningLevels: [
+          { id: "low", label: "Low" },
+          { id: "medium", label: "Medium" },
+          { id: "high", label: "High" },
+        ],
+        composerActions: [],
+        strings: {
+          signInHint: `Add a ${definition.displayName} key with bb pool account add-env --keys-file <file>.`,
+          expiredHint:
+            "The pool token was rotated or every account was disabled; restart the thread.",
+          installUrl: "https://github.com/itfarrier/bb-plugins",
+        },
+        models: {
+          fallback: pickerFallbackModels(definition, models),
+          scope: "host",
+        },
+      };
+      expect(() => validatePluginProviderDeclaration(declaration as never)).not.toThrow();
+    }
+  });
+
+  it("passes without a models block when the catalog is empty", () => {
+    const definition = PICKER_PROVIDER_DEFS[0]!;
+    const declaration = {
+      id: definition.pickerId,
+      displayName: definition.displayName,
+      capabilities: {
+        supportsServiceTier: false,
+        supportsNativeUserQuestion: false,
+        fork: "none",
+        supportsManualCompaction: false,
+        supportsThreadArchive: false,
+        supportsThreadRename: false,
+        permissionModes: ["auto", "full"],
+        reasoningLevels: ["low", "medium", "high"],
+      },
+      maintenance: {},
+      composerActions: [],
+      strings: {
+        signInHint: "hint",
+        expiredHint: "expired",
+        installUrl: "https://github.com/itfarrier/bb-plugins",
+      },
+    };
+    expect(() => validatePluginProviderDeclaration(declaration as never)).not.toThrow();
   });
 });
