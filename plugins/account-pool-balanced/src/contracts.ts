@@ -1,0 +1,495 @@
+import { z } from "zod";
+import { COMPATIBLE_PROVIDER_IDS } from "./compatible-providers.js";
+
+export const BASE_PROVIDERS = [
+  "claude",
+  "codex",
+  "kimi",
+  "zai",
+  "opencode-go",
+  "cursor",
+  "devin",
+] as const;
+
+export const ALL_PROVIDERS: readonly string[] = [
+  ...BASE_PROVIDERS,
+  ...COMPATIBLE_PROVIDER_IDS,
+];
+
+export const DEFAULT_ACCOUNT_POOL_CONFIG = {
+  anthropicUpstreamBaseUrl: "https://api.anthropic.com",
+  codexUpstreamBaseUrl: "https://chatgpt.com/backend-api/codex",
+  kimiUpstreamBaseUrl: "https://api.kimi.com/coding/v1",
+  zaiUpstreamBaseUrl: "https://api.z.ai/api/coding/paas/v4",
+  opencodeGoUpstreamBaseUrl: "https://opencode.ai/zen/go/v1",
+  cursorUpstreamBaseUrl: "https://api2.cursor.sh",
+  devinUpstreamBaseUrl: "https://server.codeium.com",
+  switchThreshold: 0.98,
+  routingStrategy: "sequential" as const,
+  reserveDrainHours: 24,
+  restDays: [0, 6],
+  vpnOnlyProviders: ["codex", "claude", "cursor", "devin"] as Array<"codex" | "claude" | "cursor" | "devin">,
+  vpnStatusFile: null as string | null,
+  vpnGuardEnabled: false,
+  vpnPolicyVersion:2 as const,
+};
+
+const httpUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => {
+    const protocol = new URL(value).protocol;
+    return protocol === "http:" || protocol === "https:";
+  }, "Must be an HTTP or HTTPS URL.");
+
+const switchThresholdSchema = z
+  .number()
+  .positive("Must be greater than 0.")
+  .max(1, "Must be at most 1.");
+
+
+export const routingStrategySchema = z.enum(["sequential", "balanced"]);
+
+export const accountRoleSchema = z.enum(["primary", "reserve"]);
+
+const capFractionSchema = z
+  .number()
+  .min(0, "Must be at least 0.")
+  .max(1, "Must be at most 1.");
+
+export const accountCapSchema = z
+  .object({ early: capFractionSchema, late: capFractionSchema })
+  .strict()
+  .refine((cap) => cap.early <= cap.late, "early must not exceed late.")
+  .nullable();
+
+const reserveDrainHoursSchema = z
+  .number()
+  .positive("Must be greater than 0.")
+  .max(168, "Must be at most 168.");
+
+const restDaysSchema = z
+  .array(z.number().int().min(0).max(6))
+  .refine(
+    (days) => new Set(days).size === days.length,
+    "Weekdays must be unique.",
+  );
+
+export const accountPoolConfigSchema = z
+  .object({
+    anthropicUpstreamBaseUrl: httpUrlSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.anthropicUpstreamBaseUrl,
+    ),
+    codexUpstreamBaseUrl: httpUrlSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.codexUpstreamBaseUrl,
+    ),
+    kimiUpstreamBaseUrl: httpUrlSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.kimiUpstreamBaseUrl,
+    ),
+    zaiUpstreamBaseUrl: httpUrlSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.zaiUpstreamBaseUrl,
+    ),
+    opencodeGoUpstreamBaseUrl: httpUrlSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.opencodeGoUpstreamBaseUrl,
+    ),
+    cursorUpstreamBaseUrl: httpUrlSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.cursorUpstreamBaseUrl,
+    ),
+    devinUpstreamBaseUrl: httpUrlSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.devinUpstreamBaseUrl,
+    ),
+    switchThreshold: switchThresholdSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.switchThreshold,
+    ),
+    routingStrategy: routingStrategySchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.routingStrategy,
+    ),
+    reserveDrainHours: reserveDrainHoursSchema.default(
+      DEFAULT_ACCOUNT_POOL_CONFIG.reserveDrainHours,
+    ),
+    restDays: restDaysSchema.default(DEFAULT_ACCOUNT_POOL_CONFIG.restDays),
+    vpnOnlyProviders: z.array(z.enum(["codex", "claude", "cursor", "devin"])).max(4).refine(v => new Set(v).size === v.length).default(DEFAULT_ACCOUNT_POOL_CONFIG.vpnOnlyProviders),
+    vpnStatusFile: z.string().min(1).nullable().default(null),
+    vpnGuardEnabled: z.boolean().default(false),
+    vpnPolicyVersion:z.literal(2).default(2),
+    compatibleUpstreamBaseUrls: z
+      .record(z.string(), httpUrlSchema)
+      .default({}),
+  })
+  .strip();
+
+export type AccountPoolConfig = z.infer<typeof accountPoolConfigSchema>;
+
+export const accountPoolConfigSetInputSchema = z
+  .object({
+    anthropicUpstreamBaseUrl: httpUrlSchema.optional(),
+    codexUpstreamBaseUrl: httpUrlSchema.optional(),
+    kimiUpstreamBaseUrl: httpUrlSchema.optional(),
+    zaiUpstreamBaseUrl: httpUrlSchema.optional(),
+    opencodeGoUpstreamBaseUrl: httpUrlSchema.optional(),
+    cursorUpstreamBaseUrl: httpUrlSchema.optional(),
+    devinUpstreamBaseUrl: httpUrlSchema.optional(),
+    switchThreshold: switchThresholdSchema.optional(),
+    routingStrategy: routingStrategySchema.optional(),
+    reserveDrainHours: reserveDrainHoursSchema.optional(),
+    restDays: restDaysSchema.optional(),
+    vpnOnlyProviders: z.array(z.enum(["codex", "claude", "cursor", "devin"])).max(4).refine(v => new Set(v).size === v.length).optional(),
+    vpnStatusFile: z.string().min(1).nullable().optional(),
+    vpnGuardEnabled: z.boolean().optional(),
+    compatibleUpstreamBaseUrls: z.record(z.string(), httpUrlSchema).optional(),
+  })
+  .strict();
+
+export type AccountPoolConfigSetInput = z.infer<
+  typeof accountPoolConfigSetInputSchema
+>;
+
+export interface AccountPoolConfigController {
+  get: () => AccountPoolConfig;
+  set: (input: AccountPoolConfigSetInput) => Promise<AccountPoolConfig>;
+}
+
+export const providerSchema = z.enum([
+  ...BASE_PROVIDERS,
+  ...COMPATIBLE_PROVIDER_IDS,
+]);
+export type PoolProvider = z.infer<typeof providerSchema>;
+
+const providerKeySchemas = Object.fromEntries(
+  ALL_PROVIDERS.map((provider) => [provider, z.string().uuid().nullable()]),
+);
+const providerFlagSchemas = Object.fromEntries(
+  ALL_PROVIDERS.map((provider) => [provider, z.boolean()]),
+);
+export const accountKindSchema = z.enum(["oauth", "api-key"]);
+export const modelFamilySchema = z.enum([
+  "fable",
+  "sonnet",
+  "opus",
+  "haiku",
+  "other",
+]);
+
+export type ModelFamily = z.infer<typeof modelFamilySchema>;
+
+export const familyQuotaSchema = z
+  .object({
+    utilization: z.number().nullable(),
+    resetAt: z.number().int().nullable(),
+    status: z.string().nullable(),
+    observedAt: z.number().int(),
+    source: z.enum(["header", "usage"]),
+  })
+  .strict();
+
+export type FamilyQuota = z.infer<typeof familyQuotaSchema>;
+
+export const familyWeeklySchema = z
+  .object({
+    fable: familyQuotaSchema.nullable(),
+    sonnet: familyQuotaSchema.nullable(),
+    opus: familyQuotaSchema.nullable(),
+    haiku: familyQuotaSchema.nullable(),
+    other: familyQuotaSchema.nullable(),
+  })
+  .strict();
+
+export type FamilyWeekly = z.infer<typeof familyWeeklySchema>;
+
+export const EMPTY_FAMILY_WEEKLY: FamilyWeekly = {
+  fable: null,
+  sonnet: null,
+  opus: null,
+  haiku: null,
+  other: null,
+};
+
+export const limitWindowSlotSchema = z.enum(["primary", "secondary"]);
+
+export type LimitWindowSlot = z.infer<typeof limitWindowSlotSchema>;
+
+export const limitWindowSchema = z
+  .object({
+    slot: limitWindowSlotSchema,
+    windowMinutes: z.number().int().positive().nullable(),
+    ...familyQuotaSchema.shape,
+  })
+  .strict();
+
+export type LimitWindow = z.infer<typeof limitWindowSchema>;
+
+export const resetCreditsSchema = z.object({
+  availableCount: z.number().int().nonnegative(),
+  credits: z.array(z.object({
+    expiresAt: z.number().int().nullable(),
+    title: z.string().nullable(),
+    remaining: z.number().int().positive().optional(),
+    limitTypes: z.array(z.string()).optional(),
+    usableNow: z.boolean().optional(),
+    requiresLimit: z.boolean().optional(),
+  }).strict()).nullable(),
+  observedAt: z.number().int().nonnegative(),
+}).strict();
+
+export type ResetCredits = z.infer<typeof resetCreditsSchema>;
+
+const clockTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+export const accountPolicySchema = z.object({
+  enabled: z.boolean(),
+  fiveHourKeep: z.number().min(0).max(100).nullable().default(null),
+  weeklyKeep: z.number().min(0).max(100).nullable().default(null),
+  reserveDrainHours: reserveDrainHoursSchema.nullable().default(null),
+  schedule: z.object({
+    timeZone: z.string().refine(value => {
+      try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; }
+    }, 'Unknown timezone'),
+    intervals: z.array(z.object({
+      days: restDaysSchema.refine(days => days.length > 0, 'Select weekdays'),
+      start: clockTimeSchema,
+      end: clockTimeSchema,
+    }).strict().refine(value => value.start !== value.end, 'Start and end must differ')).max(28),
+  }).strict().nullable().default(null),
+}).strict();
+export type AccountPolicy = z.infer<typeof accountPolicySchema>;
+
+export const accountProjectsSchema = z.object({
+  onlySelected: z.boolean(),
+  rules: z.array(z.object({
+    projectId: z.string().min(1).max(200),
+    role: z.enum(["inherit", "primary", "reserve"]),
+  }).strict()).max(200),
+}).strict().refine(value => new Set(value.rules.map(rule => rule.projectId)).size === value.rules.length,
+  "Include each project only once");
+export type AccountProjects = z.infer<typeof accountProjectsSchema>;
+
+export const accountSchema = z
+  .object({
+    id: z.string().uuid(),
+    provider: providerSchema,
+    kind: accountKindSchema,
+    label: z.string().min(1),
+    email: z.string().email().nullable(),
+    accountUuid: z.string().uuid().nullable().default(null),
+    codexAccountId: z.string().min(1).optional(),
+    subscriptionType: z.string().nullable(),
+    rateLimitTier: z.string().nullable(),
+    enabled: z.boolean(),
+    priority: z.number().int(),
+    createdAt: z.number().int().nonnegative(),
+    lastUsedAt: z.number().int().nonnegative().nullable().default(null),
+    lastUsedHostId: z.string().min(1).nullable().default(null),
+    role: accountRoleSchema.default("primary"),
+    cap: accountCapSchema.default(null),
+    policy: accountPolicySchema.optional(),
+    projects: accountProjectsSchema.optional(),
+    drainOnce: z.boolean().optional(),
+    drainGeneration: z.string().uuid().nullable().optional(),
+  })
+  .strict();
+
+export type Account = z.infer<typeof accountSchema>;
+
+export const oauthSecretSchema = z
+  .object({
+    kind: z.literal("oauth"),
+    accessToken: z.string().min(1),
+    refreshToken: z.string().min(1),
+    expiresAt: z.number().int().positive().nullable(),
+    idToken: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const apiKeySecretSchema = z
+  .object({
+    kind: z.literal("api-key"),
+    apiKey: z.string().min(1),
+  })
+  .strict();
+
+export const accountSecretSchema = z.discriminatedUnion("kind", [
+  oauthSecretSchema,
+  apiKeySecretSchema,
+]);
+
+export type AccountSecret = z.infer<typeof accountSecretSchema>;
+
+const quotaFieldsShape = {
+  fiveHourUtilization: z.number().nullable(),
+  fiveHourResetAt: z.number().int().nullable(),
+  fiveHourStatus: z.string().nullable(),
+  sevenDayUtilization: z.number().nullable(),
+  sevenDayResetAt: z.number().int().nullable(),
+  sevenDayStatus: z.string().nullable(),
+  representativeClaim: z.string().nullable(),
+  familyWeekly: familyWeeklySchema,
+  limitWindows: z.array(limitWindowSchema),
+  observedAt: z.number().int().nullable(),
+  heldUntil: z.number().int().nullable(),
+  error: z.string().nullable(),
+};
+
+export const quotaSchema = z
+  .object({
+    accountId: z.string().uuid(),
+    ...quotaFieldsShape,
+  })
+  .strict();
+
+export type AccountQuota = z.infer<typeof quotaSchema>;
+
+export const accountSummarySchema = accountSchema.extend({
+  lastUsedHostName: z.string().min(1).nullable(),
+  ...quotaFieldsShape,
+  successfulRequests: z.number().int().nonnegative(),
+  resetCredits: resetCreditsSchema.nullable(),
+  inFlight: z.number().int().nonnegative(),
+  capLimit: z.number().nullable(),
+  eligible: z.boolean(),
+  capReached: z.boolean(),
+  drainOpensAt: z.number().int().nullable(),
+  status: z.enum(["disabled", "ready", "held", "exhausted", "error"]),
+});
+
+export type AccountSummary = z.infer<typeof accountSummarySchema>;
+
+export const hubTokenSummarySchema = z
+  .object({
+    hostId: z.string().min(1),
+    hostName: z.string().min(1).nullable(),
+    mintedAt: z.number().int().nonnegative(),
+    lastUsedAt: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+
+export type HubTokenSummary = z.infer<typeof hubTokenSummarySchema>;
+
+export const routedThreadStatusSchema = z
+  .object({
+    threadId: z.string().min(1),
+    hostId: z.string().min(1),
+    hostName: z.string().min(1).nullable(),
+    routedAt: z.number().int().nonnegative(),
+    localClaudeStatus: z.enum(["unauthenticated", "expired", "proxied"]),
+  })
+  .strict();
+
+export type RoutedThreadStatus = z.infer<typeof routedThreadStatusSchema>;
+
+export const statusSchema = z
+  .object({
+    route: z.string(),
+    vpn: z.object({ state: z.enum(["connected", "disconnected", "unknown"]), blockedProviders: z.array(providerSchema), guardEnabled:z.boolean().default(false), assurance:z.enum(["verified_ipv4","unverified","invalid"]).optional(),reason:z.string().optional() }).strict().optional(),
+    enabledAccountCount: z.number().int().nonnegative(),
+    inFlight: z.number().int().nonnegative(),
+    accepting: z.boolean(),
+    hosts: z.array(hubTokenSummarySchema),
+    accounts: z.array(accountSummarySchema),
+    activeAccounts: z.object(providerKeySchemas).strict(),
+    routing: z.object(providerFlagSchemas).strict(),
+  })
+  .strict();
+
+export type PoolStatus = z.infer<typeof statusSchema>;
+
+export const routedThreadStatusListSchema = z.array(routedThreadStatusSchema);
+
+export const statusReportSchema = statusSchema
+  .extend({ routedThreadsWithoutLocalLogin: routedThreadStatusListSchema })
+  .strict();
+
+export type PoolStatusReport = z.infer<typeof statusReportSchema>;
+
+export const accountAddInputSchema = z
+  .object({
+    provider: providerSchema,
+    source: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("import") }).strict(),
+      z
+        .object({ kind: z.literal("api-key"), apiKey: z.string().min(1) })
+        .strict(),
+    ]),
+    label: z.string().min(1).nullable(),
+    priority: z.number().int(),
+  })
+  .strict();
+
+export type AccountAddInput = z.infer<typeof accountAddInputSchema>;
+
+export const loginStartSchema = z
+  .object({
+    sessionId: z.string().uuid(),
+    authorizeUrl: z.string().url(),
+  })
+  .strict();
+
+export const loginCompleteInputSchema = z
+  .object({
+    sessionId: z.string().uuid(),
+    pasted: z.string().trim().min(1),
+  })
+  .strict();
+
+export const codexLoginStartSchema = z
+  .object({
+    sessionId: z.string().uuid(),
+    verificationUri: z.string().url(),
+    userCode: z.string().min(1),
+    expiresAt: z.number().int().positive(),
+    intervalMs: z.number().int().positive(),
+  })
+  .strict();
+
+export const codexLoginPollInputSchema = z
+  .object({ sessionId: z.string().uuid() })
+  .strict();
+
+export const codexLoginCancelSchema = z
+  .object({ cancelled: z.boolean() })
+  .strict();
+
+export const codexLoginPollSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("pending") }).strict(),
+  z
+    .object({ status: z.literal("complete"), account: accountSummarySchema })
+    .strict(),
+  z.object({ status: z.literal("error"), message: z.string().min(1) }).strict(),
+]);
+
+export const accountIdInputSchema = z
+  .object({ id: z.string().uuid() })
+  .strict();
+
+export const accountPriorityInputSchema = z
+  .object({ accountId: z.string().uuid(), priority: z.number().int() })
+  .strict();
+
+export const accountRoleInputSchema = z
+  .object({ accountId: z.string().uuid(), role: accountRoleSchema })
+  .strict();
+
+export const accountDrainInputSchema = z
+  .object({ accountId: z.string().uuid(), enabled: z.boolean() })
+  .strict();
+
+export const accountCapInputSchema = z
+  .object({ accountId: z.string().uuid(), cap: accountCapSchema })
+  .strict();
+
+export const accountReorderInputSchema = z
+  .object({
+    provider: providerSchema,
+    accountIds: z.array(z.string().uuid()).min(1),
+  })
+  .strict();
+
+export const routingSetInputSchema = z
+  .object({ provider: providerSchema, enabled: z.boolean() })
+  .strict();
+
+export const tokenRotateInputSchema = z
+  .object({ machine: z.string().min(1) })
+  .strict();
+
+export const bypassInputSchema = z
+  .object({ threadId: z.string().min(1), bypassed: z.boolean() })
+  .strict();

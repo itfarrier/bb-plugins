@@ -1,0 +1,32 @@
+---
+name: account-pool
+description: "Configure or diagnose Account Pooler accounts, authentication, quota routing, and failover through bb pool."
+---
+
+# Account Pooler
+
+Use `bb pool` for this plugin's accounts and routes. Inspect current state with
+`bb pool status --json` and `bb pool account list --json` before changing routing.
+Use `bb pool --help` for available commands.
+
+For account login/import, secret handling, quota refresh, routing settings,
+ordering, or failover, read
+[references/accounts-and-routing.md](references/accounts-and-routing.md).
+
+Use stdin or supported login/import flows for credentials; never put secret values
+in command arguments or chat. Confirm the resulting account and routing state.
+Do not enable the plugin or change accounts unless the requested task calls for it.
+
+For external clients (including agents launched in Orca), use
+`bb pool client add <name> --output <new-private-file-on-server>` and
+`bb pool client revoke <name>`. The token file is on the BB server; transfer it
+privately, never print its contents. Client credentials follow their server-side
+project binding and account policies. Use `--project <project-id>` when creating
+a project-bound client token. See [external clients](../../docs/external-clients.md)
+for standalone startup, process-scoped CLI setup and the separate Devin cloud API.
+
+For VPN-only provider switches, local status-writer requirements, and temporary
+network recovery, see [VPN policy](../../docs/vpn-policy.md). Protected
+providers deny every upstream operation when the server VPN state is unknown.
+
+Pooler0.4.14+: `bb pool config set vpnGuardEnabled true` включает fail-closed связь с Guard0.1.2+ на машине сервера пула. Настройка также доступна в UI. Удаление Guard не открывает трафик связанного пула; удаление/отключение этой связи явно снимает дополнительный барьер. Китайские провайдеры независимы.

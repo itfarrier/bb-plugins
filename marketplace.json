@@ -1,0 +1,81 @@
+{
+  "$schema": "https://getbb.app/schemas/marketplace.schema.json",
+  "schemaVersion": 1,
+  "name": "itfarrier-public",
+  "displayName": "itfarrier Public Plugins",
+  "description": "BB plugins maintained by itfarrier: multi-provider account pool.",
+  "plugins": [
+    {
+      "id": "account-pool-balanced",
+      "icon": {
+        "url": "./icons/account-pool.svg"
+      },
+      "displayName": "Account Pool (multi-provider)",
+      "description": "Pool and balance accounts across Claude, Codex, Kimi, Z.ai, OpenCode, Cursor, Devin and OpenAI-compatible API-key providers (NVIDIA, OpenRouter, Groq, Mistral, ModelScope, Cloudflare, LLM7, Kilo).",
+      "author": {
+        "name": "itfarrier",
+        "github": "itfarrier"
+      },
+      "tags": [
+        "agents",
+        "accounts"
+      ],
+      "source": {
+        "git": {
+          "url": "https://github.com/itfarrier/bb-plugins.git",
+          "subdir": "plugins/account-pool-balanced",
+          "range": "^0.5.0",
+          "tagPrefix": "account-pool-balanced/"
+        }
+      }
+    },
+    {
+      "id": "automation-catalog",
+      "icon": {
+        "url": "./icons/automation-catalog.svg"
+      },
+      "displayName": "Automation Catalog",
+      "description": "One catalog for automations across schedulers, hosts and teams.",
+      "author": {
+        "name": "OXI",
+        "github": "OXI-717"
+      },
+      "tags": [
+        "automation",
+        "monitoring"
+      ],
+      "source": {
+        "git": {
+          "url": "https://github.com/OXI-717/bb-plugins.git",
+          "subdir": "plugins/automation-catalog",
+          "range": "^0.1.15",
+          "tagPrefix": "automation-catalog/"
+        }
+      }
+    },
+    {
+      "id": "vpn-guard",
+      "icon": {
+        "url": "./icons/vpn-guard.svg"
+      },
+      "displayName": "VPN Guard",
+      "description": "Защита агентов по VPN и ручной блок / VPN protection and manual block",
+      "author": {
+        "name": "OXI",
+        "github": "OXI-717"
+      },
+      "tags": [
+        "agents",
+        "network"
+      ],
+      "source": {
+        "git": {
+          "url": "https://github.com/OXI-717/bb-plugins.git",
+          "subdir": "plugins/vpn-guard",
+          "range": "^0.1.6",
+          "tagPrefix": "vpn-guard/"
+        }
+      }
+    }
+  ]
+}

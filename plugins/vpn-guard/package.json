@@ -1,0 +1,56 @@
+{
+  "name": "bb-plugin-vpn-guard",
+  "version": "0.1.6",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.46",
+    "bbPluginSdk": ">=0.6.37"
+  },
+  "bb": {
+    "name": "VPN Guard",
+    "description": "\u0417\u0430\u0449\u0438\u0442\u0430 \u0430\u0433\u0435\u043d\u0442\u043e\u0432 \u043f\u043e VPN \u0438 \u0440\u0443\u0447\u043d\u043e\u0439 \u0431\u043b\u043e\u043a / VPN protection and manual block",
+    "branding": {
+      "icon": "Shield"
+    },
+    "server": "./server.ts",
+    "host": "./host.ts",
+    "skills": [
+      "skills"
+    ],
+    "app": "./app.tsx"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@get-bb/plugin-sdk": "0.6.37",
+    "@testing-library/react": "^16.3.3",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "better-sqlite3": "^12.11.1",
+    "cron-parser": "^5.10.2",
+    "esbuild": "^0.28.1",
+    "hono": "^4.13.13",
+    "jsdom": "^29.1.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.11"
+  },
+  "description": "\u0417\u0430\u0449\u0438\u0442\u0430 \u0430\u0433\u0435\u043d\u0442\u043e\u0432 \u043f\u043e VPN \u0438 \u0440\u0443\u0447\u043d\u043e\u0439 \u0431\u043b\u043e\u043a / VPN protection and manual block",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OXI-717/bb-plugins.git",
+    "directory": "plugins/vpn-guard"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "bb plugin build .",
+    "preview:build": "esbuild preview/main.tsx --bundle --format=esm --platform=browser --jsx=automatic --alias:@get-bb/plugin-sdk/app=./preview/sdk.ts --outfile=preview/main.js"
+  }
+}
