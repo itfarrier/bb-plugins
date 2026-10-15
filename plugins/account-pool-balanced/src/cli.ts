@@ -350,7 +350,7 @@ export function registerPoolCli(
         summary:
           "Add API-key accounts for every supported provider key found in the environment",
         usage:
-          "bb pool account add-env [--env-file <path>[,<path>...]] [--only <provider>] [--priority <n>]",
+          "bb pool account add-env [--keys-file <path>[,<path>...]] [--only <provider>] [--priority <n>]",
       },
       {
         name: "account-login-poll",
@@ -693,10 +693,14 @@ export function registerPoolCli(
           };
         }
         if (argv[0] === "account" && argv[1] === "add-env") {
-          const flags = parseFlags(argv.slice(2), [], ["env-file", "only", "priority"]);
+          const flags = parseFlags(argv.slice(2), [], ["keys-file", "env-file", "only", "priority"]);
           let source: Readonly<Record<string, string | undefined>> = process.env;
-          const envFile = flags.values.get("env-file");
+          const envFile =
+            flags.values.get("keys-file") ?? flags.values.get("env-file");
           if (envFile !== undefined) {
+            // Read here, where the command executes — the daemon's environment
+            // does not inherit the user's shell rc files, and bb/node consume
+            // an --env-file flag before plugin code runs.
             const merged: Record<string, string> = {};
             for (const entry of envFile.split(",")) {
               const file = entry.trim();
@@ -706,7 +710,7 @@ export function registerPoolCli(
                 : file;
               Object.assign(merged, parseEnvFile(await fs.readFile(expanded, "utf8")));
             }
-            source = { ...process.env, ...merged };
+            source = merged;
           }
           const only = flags.values.get("only");
           const priority = Number(flags.values.get("priority") ?? "100");
@@ -719,10 +723,10 @@ export function registerPoolCli(
               stdout:
                 "No supported provider API keys found. Checked: " +
                 COMPATIBLE_ENV_SUMMARY +
-                ". The bb server often runs without your shell rc environment; " +
+                ". The bb daemon runs without your shell rc environment; " +
                 "pass files explicitly, e.g. " +
-                "--env-file ~/.zshrc or --env-file ~/.zshrc,~/.config/freelm/env " +
-                "(export KEY='...' lines are parsed; later files win).\n",
+                "--keys-file ~/.zshrc,~/.config/freelm/env " +
+                "(KEY=VALUE and zsh export KEY='...' lines are parsed; later files win).\n",
             };
           }
           const existing = await operations.list();

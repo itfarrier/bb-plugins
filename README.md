@@ -29,8 +29,9 @@ bb plugin install account-pool-balanced@itfarrier-public
 # import every supported key found in the environment (e.g. from ~/.zshrc)
 bb pool account add-env
 
-# or from a dotenv file, one provider only, with a priority
-bb pool account add-env --env-file ~/.config/pool/keys.env --only openrouter --priority 0
+# or read keys from files directly (KEY=VALUE and zsh export lines both work);
+# needed because the bb daemon does not inherit your shell rc environment
+bb pool account add-env --keys-file ~/.zshrc,~/.config/freelm/env
 
 bb pool status
 ```
