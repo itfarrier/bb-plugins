@@ -32,6 +32,15 @@ import {
   ZAI_MOUNT_PREFIX,
 } from "./openai-compatible-adapter.js";
 import { COMPATIBLE_PROVIDERS } from "./compatible-providers.js";
+import type { PluginProviderDeclaration } from "@get-bb/plugin-sdk";
+import {
+  PICKER_PROVIDER_DEFS,
+  desiredPickerProviders,
+  modelIdsFromCatalog,
+  opencodeConfigContent,
+  pickerFallbackModels,
+  type PickerProviderDefinition,
+} from "./picker-providers.js";
 import { PoolOperations } from "./operations.js";
 import { registerUsageSource } from "./usage-source.js";
 import { accountPoolRpcContract, createRpcHandlers } from "./rpc.js";
@@ -164,8 +173,10 @@ export function createAccountPoolPlugin(
         bb.log.warn(
           `Account Pooler ${provider} transport failed: ${transportErrorCode(error)}.`,
         ),
-      onAccountsChanged: () =>
-        bb.realtime.publish(ACCOUNT_POOL_ACCOUNTS_CHANGED, {}),
+      onAccountsChanged: () => {
+        bb.realtime.publish(ACCOUNT_POOL_ACCOUNTS_CHANGED, {});
+        schedulePickerSync();
+      },
     });
     if (transport !== null) {
       bb.providers.experimental_contributeEnv("acp-oxi-devin-pool", async context => {
@@ -220,6 +231,173 @@ export function createAccountPoolPlugin(
         "Add and enable a Claude or Codex account with `bb pool account add`.",
       );
     }
+    // --- Agent picker: one BB provider per enabled pool provider (OpenAI wire)
+    const pickerRegistrations = new Map<string, { dispose(): void }>();
+    const pickerEnvContributed = new Set<string>();
+    const catalogCache = new Map<string, { at: number; models: string[] }>();
+    const catalogToken = await hubTokens.forProject("pool-picker-catalog", null);
+    const CATALOG_TTL_MS = 10 * 60 * 1_000;
+    const fetchCatalogModels = async (
+      definition: PickerProviderDefinition,
+    ): Promise<string[]> => {
+      const cached = catalogCache.get(definition.pickerId);
+      if (cached !== undefined && now() - cached.at < CATALOG_TTL_MS) {
+        return cached.models;
+      }
+      try {
+        const response = await hub.handle(
+          new Request(`http://pool.invalid/${definition.mount}/models`, {
+            headers: { authorization: `Bearer ${catalogToken}` },
+          }),
+          definition.provider,
+        );
+        if (!response.ok) {
+          await response.body?.cancel();
+          return cached?.models ?? [];
+        }
+        const models = modelIdsFromCatalog(await response.json().catch(() => null));
+        catalogCache.set(definition.pickerId, { at: now(), models });
+        return models;
+      } catch {
+        return cached?.models ?? [];
+      }
+    };
+    const ensurePickerEnv = (definition: PickerProviderDefinition) => {
+      if (pickerEnvContributed.has(definition.pickerId)) return;
+      pickerEnvContributed.add(definition.pickerId);
+      bb.providers.experimental_contributeEnv(
+        definition.pickerId,
+        async (context) => {
+          if (!(await operations.isRoutingEnabled(definition.provider))) {
+            return [];
+          }
+          const token = await hubTokens.forProject(
+            context.hostId,
+            context.projectId,
+          );
+          const models = await fetchCatalogModels(definition);
+          return [
+            {
+              name: "OPENCODE_CONFIG_CONTENT",
+              value: opencodeConfigContent(definition, models),
+              reason: "Inline OpenCode provider config for the pool",
+            },
+            {
+              name: definition.keyEnv,
+              value: token,
+              reason: "Account Pooler hub token for this machine",
+            },
+            {
+              name: definition.baseEnv,
+              value: {
+                serverPath: `${hubBasePath(bb.pluginId)}/${definition.mount}`,
+              },
+              reason: "Routed through the Account Pooler hub",
+            },
+          ];
+        },
+      );
+      bb.providers.experimental_contributeEnvHealth(definition.pickerId, () =>
+        proxiedHealth(definition.provider),
+      );
+    };
+    const pickerDeclaration = (
+      definition: PickerProviderDefinition,
+      models: readonly string[],
+    ): PluginProviderDeclaration => ({
+      id: definition.pickerId,
+      displayName: definition.displayName,
+      icon: "Layers",
+      experimental_bridgeOptions: {
+        acpLaunchSpec: {
+          displayName: definition.displayName,
+          command: "opencode",
+          args: ["acp"],
+          env: {},
+        },
+        acpDialect: "generic",
+      },
+      maintenance: {},
+      capabilities: {
+        supportsServiceTier: false,
+        supportsNativeUserQuestion: false,
+        fork: "none",
+        supportsManualCompaction: false,
+        supportsThreadArchive: false,
+        supportsThreadRename: false,
+        permissionModes: ["auto", "full"],
+        reasoningLevels: ["low", "medium", "high"],
+      },
+      reasoningLevels: [
+        { id: "low", label: "Low" },
+        { id: "medium", label: "Medium" },
+        { id: "high", label: "High" },
+      ],
+      composerActions: [],
+      strings: {
+        signInHint: `Add a ${definition.displayName} key with bb pool account add-env --keys-file <file>.`,
+        expiredHint:
+          "The pool token was rotated or every account was disabled; restart the thread.",
+        installUrl: "https://github.com/itfarrier/bb-plugins",
+        brandPrefix: "",
+      },
+      models: {
+        fallback: pickerFallbackModels(definition, models),
+        scope: "host",
+      },
+    });
+    const syncPickerProviders = async () => {
+      const accounts = await operations.list();
+      const enabled = new Set(
+        (
+          await Promise.all(
+            PICKER_PROVIDER_DEFS.map(async (definition) => [
+              definition,
+              (await operations.isRoutingEnabled(definition.provider)) &&
+                accounts.some(
+                  (account) =>
+                    account.provider === definition.provider && account.enabled,
+                ),
+            ] as const),
+          )
+        )
+          .filter(([, wanted]) => wanted)
+          .map(([definition]) => definition.provider),
+      );
+      const wanted = desiredPickerProviders(enabled);
+      for (const [pickerId, registration] of pickerRegistrations) {
+        if (!wanted.some((definition) => definition.pickerId === pickerId)) {
+          registration.dispose();
+          pickerRegistrations.delete(pickerId);
+        }
+      }
+      for (const definition of wanted) {
+        if (pickerRegistrations.has(definition.pickerId)) continue;
+        ensurePickerEnv(definition);
+        const models = await fetchCatalogModels(definition);
+        pickerRegistrations.set(
+          definition.pickerId,
+          bb.providers.register(pickerDeclaration(definition, models)),
+        );
+      }
+    };
+    let pickerSyncTimer: ReturnType<typeof setTimeout> | null = null;
+    const schedulePickerSync = () => {
+      if (pickerSyncTimer !== null) return;
+      pickerSyncTimer = setTimeout(() => {
+        pickerSyncTimer = null;
+        void syncPickerProviders().catch(() => {});
+      }, 250);
+      pickerSyncTimer.unref?.();
+    };
+    bb.onDispose(async () => {
+      if (pickerSyncTimer !== null) clearTimeout(pickerSyncTimer);
+      for (const registration of pickerRegistrations.values()) {
+        registration.dispose();
+      }
+      pickerRegistrations.clear();
+    });
+    await syncPickerProviders();
     bb.rpc.register(
       accountPoolRpcContract,
       createRpcHandlers(operations, login, codexLogin, config, async (threadId) => {

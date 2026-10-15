@@ -65,9 +65,9 @@ npm run pool -- --data-dir /secure/pool serve --port 8787
 
 See [external clients and standalone setup](plugins/account-pool-balanced/docs/external-clients.md) for the full client matrix (Claude Code, Codex, Cursor, Devin).
 
-## Showing pooled providers in BB's picker
+## Pooled providers in BB's agent picker (automatic)
 
-The pool routes traffic; BB's agent picker lists agent providers. To see pooled providers in the menu, register matching ACP agents (OpenCode) and point them at the pool-injected environment — copy-paste steps in [picker setup](plugins/account-pool-balanced/docs/picker-setup.md).
+Since 0.6.0, a provider appears in BB's composer agent menu automatically when the pool has an enabled account for it (Z.ai, OpenCode Go and every API-key registry provider). The entry's agent is OpenCode over ACP with pool-injected config — no manual setup beyond having OpenCode installed. See [picker setup](plugins/account-pool-balanced/docs/picker-setup.md).
 
 ## Inherited upstream features
 
