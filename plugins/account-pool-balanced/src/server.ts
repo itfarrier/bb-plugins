@@ -371,14 +371,24 @@ export function createAccountPoolPlugin(
           pickerRegistrations.delete(pickerId);
         }
       }
+      if (typeof bb.providers.register !== "function") {
+        // Older bb: keep routing working without picker entries.
+        return;
+      }
       for (const definition of wanted) {
         if (pickerRegistrations.has(definition.pickerId)) continue;
         ensurePickerEnv(definition);
         const models = await fetchCatalogModels(definition);
-        pickerRegistrations.set(
-          definition.pickerId,
-          bb.providers.register(pickerDeclaration(definition, models)),
-        );
+        try {
+          pickerRegistrations.set(
+            definition.pickerId,
+            bb.providers.register(pickerDeclaration(definition, models)),
+          );
+        } catch (error) {
+          bb.log.warn(
+            `Account Pooler could not register the ${definition.pickerId} picker provider: ${error instanceof Error ? error.message : String(error)}.`,
+          );
+        }
       }
     };
     let pickerSyncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -390,6 +400,11 @@ export function createAccountPoolPlugin(
       }, 250);
       pickerSyncTimer.unref?.();
     };
+    void syncPickerProviders().catch((error: unknown) => {
+      bb.log.warn(
+        `Account Pooler picker sync failed: ${error instanceof Error ? error.message : String(error)}.`,
+      );
+    });
     bb.onDispose(async () => {
       if (pickerSyncTimer !== null) clearTimeout(pickerSyncTimer);
       for (const registration of pickerRegistrations.values()) {
@@ -397,7 +412,6 @@ export function createAccountPoolPlugin(
       }
       pickerRegistrations.clear();
     });
-    await syncPickerProviders();
     bb.rpc.register(
       accountPoolRpcContract,
       createRpcHandlers(operations, login, codexLogin, config, async (threadId) => {
