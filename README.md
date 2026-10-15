@@ -107,7 +107,7 @@ bb plugin install account-pool-balanced@itfarrier-public
 Or install the release directly:
 
 ```sh
-bb plugin install git:https://github.com/itfarrier/bb-plugins.git@^0.5.0 --subdirectory plugins/account-pool-balanced --tag-prefix account-pool-balanced/
+bb plugin install git:https://github.com/itfarrier/bb-plugins.git@'>=0.6.0 <1.0.0' --subdirectory plugins/account-pool-balanced --tag-prefix account-pool-balanced/
 ```
 
 Do not enable BB's built-in `account-pool` at the same time: both register `bb pool` and provider routes. These install commands are for new installations. BB 0.43.3 rejects replacing an existing plugin's Git source. If migrating from another repository, keep the existing installation until you have a supported migration procedure with verified backup and restore; do not remove a live pool just to change its source.
